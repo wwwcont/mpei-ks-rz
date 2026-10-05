@@ -192,10 +192,8 @@ def _task1(D, st, v, sks, img):
         "коммутаторов, расположенных в разных ЦК (задания 2 и 3).")
 
     draw_plan.draw_plan(sks, img / "plan_sks.png")
-    D.landscape(True)
-    f_plan = D.figure(img / "plan_sks.png",
-                      "План этажа с центрами коммутации, точками подключения и кабельными каналами", 25.5, 14.5)
-    D.landscape(False)
+    f_plan = D.figure_best(img / "plan_sks.png",
+                              "План этажа с центрами коммутации, точками подключения и кабельными каналами")
 
     D.h2("Документация")
     lens = [s.length for s in sks.all_sockets()]
@@ -293,11 +291,9 @@ def _task2(D, st, v, sks, lan2, img):
         dg.link((l.a.id, l.pa), (l.b.id, l.pb), dashed=not l.active, la=l.ra, lb=l.rb)
     for s in lan2.servers:
         dg.link((s.sw.id, s.port), s.name, width=2)
-    dg.render(img / "lan2.png", legend="Сплошные линии — активная конфигурация STP, пунктир — заблокированная "
-                                       "связь; К — корневой, Н — назначенный, Б — заблокированный порт")
-    D.landscape(True)
-    D.figure(img / "lan2.png", "Структура ЛВС с активной конфигурацией и ролями портов STP", 25.5, 15.0)
-    D.landscape(False)
+    _diagram(D, dg, img / "lan2.png", "Структура ЛВС с активной конфигурацией и ролями портов STP",
+             "Сплошные линии — активная конфигурация STP, пунктир — заблокированная связь; "
+             "К — корневой, Н — назначенный, Б — заблокированный порт")
 
     D.h2("Документация")
     rows = [(i, sw.id, sw.type, sw.cc) for i, sw in enumerate(lan2.switches, 1)]
@@ -310,6 +306,21 @@ def _task2(D, st, v, sks, lan2, img):
         "между ЦК (задание 1); скрещённый кабель (X) ставится с одной стороны, чтобы соединение "
         "коммутатор — коммутатор в целом было скрещённым.")
     _dyn(D, lan2.rows, "Динамические соединения")
+
+
+def _diagram(D, dg, path, title, legend):
+    """Схема в 1 или 2 колонки — какая на странице выйдет крупнее."""
+    best = None
+    for cols in (1, 2):
+        cand = path.with_name(f"{path.stem}_c{cols}.png")
+        dg.render(cand, legend=legend, columns=cols)
+        sc = Doc.best_scale(cand)
+        if best is None or sc > best[0]:
+            best = (sc, cand)
+    best[1].replace(path)
+    for cols in (1, 2):
+        path.with_name(f"{path.stem}_c{cols}.png").unlink(missing_ok=True)
+    return D.figure_best(path, title)
 
 
 def _dyn(D, rows, title, start=1):
@@ -410,15 +421,12 @@ def _task3(D, st, v, sks, lan2, lan3, img):
     D.bullets([f"{n} — {sw.id}, порт {q}, ЦК {sw.cc};" for n, (sw, q, _) in lan3.servers.items()][:-1]
               + [f"{n} — {sw.id}, порт {q}, ЦК {sw.cc}." for n, (sw, q, _) in list(lan3.servers.items())[-1:]])
 
-    D.landscape(True)
     D.h2("Разработка сети")
     D.p("Порты рабочих мест и серверов работают в режиме U (untagged) и принадлежат VLAN своей группы; "
         "магистральные порты между коммутаторами работают в режиме T (tagged) и передают кадры всех VLAN "
-        "с метками IEEE 802.1q.")
-    _net3(lan3).render(img / "lan3.png", legend="U — порт без меток (access), T — порт с метками 802.1q (trunk); "
-                                                "в нижней строке — номер VLAN")
-    D.figure(img / "lan3.png", "Структура ЛВС с VLAN на интеллектуальных коммутаторах", 25.5, 15.0)
-    D.landscape(False)
+        "с метками IEEE 802.1q.", keep=True)
+    _diagram(D, _net3(lan3), img / "lan3.png", "Структура ЛВС с VLAN на интеллектуальных коммутаторах",
+             "U — порт без меток (access), T — порт с метками 802.1q (trunk); в нижней строке — номер VLAN")
     D.h2("Документация")
     rows = [(i, sw.id, sw.type, sw.cc) for i, sw in enumerate(lan3.switches, 1)]
     D.table("Размещение оборудования по центрам коммутации",
@@ -474,11 +482,8 @@ def _task4(D, st, v, lan2, lan3, vr, img):
     D.p(f"MAC-адрес виртуального маршрутизатора по стандарту VRRP — 00-00-5E-00-01-XX, где XX — VRID "
         f"в шестнадцатеричном виде ({vr.vrid} = {vr.vrid:02X}h).")
 
-    _net3(lan3, routers=True).render(img / "lan4.png", legend="R-01, R-02 — внешние маршрутизаторы "
-                                                              f"(VRRP, VLAN{TRANSIT_VLAN})")
-    D.landscape(True)
-    D.figure(img / "lan4.png", "Структура ЛВС с внешними маршрутизаторами", 25.5, 15.0)
-    D.landscape(False)
+    _diagram(D, _net3(lan3, routers=True), img / "lan4.png", "Структура ЛВС с внешними маршрутизаторами",
+             f"R-01, R-02 — внешние маршрутизаторы (VRRP, VLAN{TRANSIT_VLAN})")
     k = sum(1 for r in lan3.rows if r[0] != "section")
     add = []
     if vr.extra:
@@ -505,7 +510,7 @@ def _task4(D, st, v, lan2, lan3, vr, img):
 
     D.p("Пользователям каждой VLAN рабочих групп адреса выдаются динамически из диапазона, начиная с .3 "
         "(адреса .1 и .2 заняты шлюзом и сервером группы). Для VLAN50 и VLAN60 DHCP не нужен — адреса "
-        "статические. В качестве DNS-сервера указан адрес виртуального маршрутизатора.")
+        "статические. В качестве DNS-сервера указан адрес виртуального маршрутизатора.", keep=True)
     D.table("Параметры DHCP-серверов для VLAN",
             ["VLAN", "Диапазон IP-адресов", "Маска сети", "IP-адрес маршрутизатора", "IP-адрес сервера DNS"],
             task4.dhcp(lan3, vr), widths=[1.4, 5.4, 3.2, 3.3, 3.2], size=11, head_size=10)

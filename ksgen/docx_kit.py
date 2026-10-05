@@ -1,4 +1,6 @@
 """Оформление docx: Times New Roman 14, 1,5 интервала, таблицы и рисунки с подписями, содержание."""
+from pathlib import Path
+
 from docx import Document
 from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -148,11 +150,11 @@ class Doc:
             for i, w in enumerate(widths):
                 if i < len(row.cells):
                     row.cells[i].width = Cm(w)
-        if len(rows) <= 20:   # короткую таблицу не разрывать между страницами
-            for row in t.rows[:-1]:
-                for c in row.cells:
-                    for par in c.paragraphs:
-                        par.paragraph_format.keep_with_next = True
+        # короткую таблицу не разрывать между страницами; у длинной — не оставлять «хвост» из 1–3 строк
+        for row in (t.rows[:-1] if len(rows) <= 20 else t.rows[-5:-1]):
+            for c in row.cells:
+                for par in c.paragraphs:
+                    par.paragraph_format.keep_with_next = True
         self.p("", indent=False).paragraph_format.line_spacing = 1.0
         return t
 
@@ -200,7 +202,7 @@ class Doc:
             sec.top_margin, sec.bottom_margin = Cm(2), Cm(2)
         return sec
 
-    def kv_table(self, rows, indent_cm=4.5, col1=4.6, col2=7.4):
+    def kv_table(self, rows, indent_cm=3.6, col1=4.1, col2=8.8):
         """Таблица без рамок для титула: [(подпись, значение)], подпись жирная; ("Выполнил", None) — заголовок."""
         t = self.d.add_table(rows=0, cols=2)
         t.autofit = False
@@ -223,6 +225,51 @@ class Doc:
                 self._cell(r.cells[0], k, 14, bold=True, align="left")
                 self._cell(r.cells[1], v, 14, align="left")
         return t
+
+    def figure_best(self, path, title, page_w_cm=16.5, page_h_cm=23.0):
+        """Рисунок крупнее всего: как есть по ширине страницы или повёрнутым на всю страницу."""
+        from PIL import Image
+        w, h = Image.open(path).size
+        upright = min(page_w_cm / w, (page_h_cm - 1.5) / h)
+        rotated = min(page_h_cm / w, (page_w_cm - 1.2) / h)
+        if rotated > upright * 1.1:
+            return self.figure_rotated(path, title, page_w_cm, page_h_cm)
+        return self.figure(path, title, page_w_cm, page_h_cm - 1.5)
+
+    @staticmethod
+    def best_scale(path, page_w_cm=16.5, page_h_cm=23.0):
+        from PIL import Image
+        w, h = Image.open(path).size
+        return max(min(page_w_cm / w, (page_h_cm - 1.5) / h), min(page_h_cm / w, (page_w_cm - 1.2) / h))
+
+    def figure_rotated(self, path, title, page_w_cm=16.5, page_h_cm=23.5):
+        """Широкий рисунок на всю книжную страницу, повёрнутый на 90° (читается как альбомный);
+        подпись «Рис. N. …» впечатана в изображение и повёрнута вместе с ним."""
+        from PIL import Image, ImageDraw, ImageFont
+        from .common import ROOT
+        self.figures += 1
+        im = Image.open(path).convert("RGB")
+        w, h = im.size
+        # после поворота ширина рисунка ляжет вдоль высоты страницы
+        scale_cm = min(page_h_cm / w, (page_w_cm - 1.2) / h)       # см на пиксель
+        px14 = int(0.494 / scale_cm)                              # 14 pt в пикселях рисунка
+        f = ImageFont.truetype(str(ROOT / "fonts" / "LiberationSerif-Regular.ttf"), px14)
+        cap = f"Рис. {self.figures}. {title}"
+        strip = int(px14 * 2.2)
+        out = Image.new("RGB", (w, h + strip), "white")
+        out.paste(im, (0, 0))
+        ImageDraw.Draw(out).text((w / 2, h + strip / 2), cap, font=f, fill=(0, 0, 0), anchor="mm")
+        out = out.rotate(90, expand=True)
+        rot = Path(path).with_name(Path(path).stem + "_rot.png")
+        out.save(rot)
+        par = self.d.add_paragraph()
+        par.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        par.paragraph_format.first_line_indent = Cm(0)
+        par.paragraph_format.line_spacing = 1.0
+        wr, hr = out.size
+        width = min(page_w_cm, page_h_cm * wr / hr)
+        par.add_run().add_picture(str(rot), width=Cm(width))
+        return self.figures
 
     # ---- служебное ----
     def toc(self):

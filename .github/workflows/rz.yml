@@ -26,14 +26,16 @@ jobs:
         (github.event.comment.user.login == github.event.issue.user.login ||
          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))))
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - name: Зависимости
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libreoffice-writer python3-uno fonts-liberation fonts-crosextra-carlito
-          pip install -q --break-system-packages -r requirements.txt
+      - name: LibreOffice (кэш пакетов между запусками — зеркало apt бывает очень медленным)
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libreoffice-writer python3-uno fonts-liberation
+          version: "1"
+      - name: Python-зависимости
+        run: pip install -q --break-system-packages -r requirements.txt
       - name: Форма Issue → файл (в shell не подставляется)
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
@@ -72,7 +74,7 @@ jobs:
             cd "$GITHUB_WORKSPACE"; sleep $((RANDOM % 5 + 2))
           done
       - name: Комментарий
-        if: always() && steps.rz.outcome != 'skipped'
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           N: ${{ github.event.issue.number }}
