@@ -71,6 +71,8 @@ def draw_plan(sks: SKS, path, sockets=True):
                 tx, ty = x + 4, y + 3
             else:
                 tx, ty = x + 4, y - 19
+            bb = d.textbbox((tx, ty), label, font=small)
+            d.rectangle([bb[0] - 1, bb[1] - 1, bb[2] + 1, bb[3] + 1], fill="white")
             d.text((tx, ty), label, font=small, fill=INK)
     _cc_marker(d, sks, font(30))
     im.save(path)
