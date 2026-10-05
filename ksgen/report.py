@@ -110,13 +110,13 @@ def _title(D, st, v, tasks, full):
     D.p("по курсу «Компьютерные сети»", align="center", indent=False)
     D.p("«Основы построения компьютерных сетей»", align="center", indent=False)
     D.p(f"Вариант {v.key}", align="center", indent=False)
-    for _ in range(5):
+    for _ in range(3):
         D.p("", indent=False)
     for t in (f"Выполнил: студент группы {st.group}", st.fio, "",
               f"Проверил: {st.teacher}", "", "Дата сдачи: «___» ____________ 20__ г."):
         par = D.p(t, indent=False, align="left")
         par.paragraph_format.left_indent = Cm(8.5)
-    for _ in range(5):
+    for _ in range(3):
         D.p("", indent=False)
     D.p(f"Москва {st.year}", align="center", indent=False)
 
