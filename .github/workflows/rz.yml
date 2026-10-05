@@ -1,0 +1,87 @@
+name: РЗ из Issue
+
+# Issue «Мой РЗ» (метка «рз»): создали/поправили форму или написали /пересобрать →
+# сборка КМ-1…КМ-4 и полного РЗ (docx + pdf) → ветка results → комментарий со ссылками.
+on:
+  issues:
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: rz-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  build:
+    if: >-
+      contains(github.event.issue.labels.*.name, 'рз') && github.event.issue.state == 'open' &&
+      !endsWith(github.actor, '[bot]') &&
+      (github.event_name == 'issues' ||
+       (startsWith(github.event.comment.body, '/пересобрать') &&
+        (github.event.comment.user.login == github.event.issue.user.login ||
+         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Зависимости
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libreoffice-writer python3-uno fonts-liberation fonts-crosextra-carlito
+          pip install -q --break-system-packages -r requirements.txt
+      - name: Форма Issue → файл (в shell не подставляется)
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: printf '%s' "$ISSUE_BODY" > "$RUNNER_TEMP/issue.md"
+      - name: Сборка docx
+        id: rz
+        env:
+          ISSUE_BODY_FILE: ${{ runner.temp }}/issue.md
+          OUT_DIR: ${{ runner.temp }}/out
+        run: /usr/bin/python3 scripts/issue_build.py
+      - name: PDF
+        if: steps.rz.outputs.ok == '1'
+        run: |
+          cd "$RUNNER_TEMP/out/${{ steps.rz.outputs.dir }}"
+          /usr/bin/python3 "$GITHUB_WORKSPACE/scripts/to_pdf.py" *.docx
+      - name: В ветку results
+        if: steps.rz.outputs.ok == '1'
+        env:
+          DIR: ${{ steps.rz.outputs.dir }}
+          N: ${{ github.event.issue.number }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            rm -rf "$RUNNER_TEMP/res"
+            if git ls-remote --exit-code --heads origin results >/dev/null; then
+              git clone -q --depth 1 --branch results "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" "$RUNNER_TEMP/res"
+            else
+              mkdir -p "$RUNNER_TEMP/res" && cd "$RUNNER_TEMP/res" && git init -q -b results &&
+                git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" && cd -
+            fi
+            cd "$RUNNER_TEMP/res"
+            rm -rf "$DIR" && mkdir -p "$DIR" && cp -r "$RUNNER_TEMP/out/$DIR/." "$DIR/"
+            git add -A && (git diff --cached --quiet || git commit -q -m "РЗ: $DIR (Issue #$N)")
+            git push -q origin HEAD:results && break
+            cd "$GITHUB_WORKSPACE"; sleep $((RANDOM % 5 + 2))
+          done
+      - name: Комментарий
+        if: always() && steps.rz.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.event.issue.number }}
+        run: |
+          if [ "${{ steps.rz.outputs.ok }}" = "1" ] && [ "${{ job.status }}" = "success" ]; then
+            python3 scripts/issue_comment.py > "$RUNNER_TEMP/comment.md"
+          elif [ -f "$RUNNER_TEMP/error.md" ]; then
+            { echo "## ❌ Не собралось"; echo; cat "$RUNNER_TEMP/error.md"; echo; echo "Поправьте форму Issue — бот пересоберёт."; } > "$RUNNER_TEMP/comment.md"
+          else
+            echo "## ❌ Сборка упала — [лог](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" > "$RUNNER_TEMP/comment.md"
+          fi
+          gh issue comment "$N" -R "${{ github.repository }}" --body-file "$RUNNER_TEMP/comment.md"

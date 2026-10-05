@@ -1,0 +1,49 @@
+name: Мой РЗ
+description: Собрать расчётное задание по «Компьютерным сетям» — КМ-1…КМ-4 и полный РЗ в docx и pdf придут сюда комментарием
+title: "РЗ: Фамилия И.О., группа, вариант"
+labels: ["рз"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        После создания бот за пару минут соберёт все четыре КМ (каждая — со всеми предыдущими заданиями, как требует методичка)
+        и полный РЗ, и ответит комментарием со ссылками на docx и pdf. Поменять данные — отредактируйте форму, бот пересоберёт.
+  - type: input
+    id: fio
+    attributes:
+      label: ФИО
+      description: Полностью — идёт на титульный лист
+      placeholder: Рязанцев Иоанн Васильевич
+    validations:
+      required: true
+  - type: dropdown
+    id: group
+    attributes:
+      label: Группа
+      description: Группы, для которых в репо есть таблица вариантов (data/variants/)
+      options: ["А-12-23"]
+    validations:
+      required: true
+  - type: input
+    id: variant
+    attributes:
+      label: Вариант
+      description: Последние цифры варианта (12-17 → 17)
+      placeholder: "17"
+    validations:
+      required: true
+  - type: input
+    id: journal
+    attributes:
+      label: Номер в журнале
+      description: Для IP-адресов вида 1xx.1yy.zz.0 (задание 3). Пусто — равен номеру варианта
+      placeholder: "17"
+    validations:
+      required: false
+  - type: input
+    id: teacher
+    attributes:
+      label: Преподаватель
+      value: Рыбинцев В.О.
+    validations:
+      required: true

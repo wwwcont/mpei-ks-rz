@@ -1,0 +1,26 @@
+# Варианты А-12-23 — из docs/source/Варианты-А-12-23.docx (Приложение 1)
+# plan — конфигурация зон; points — точки подключения в зонах 1..5; staff — сотрудники WG-1..WG-4;
+# growth — рост, %; budget — макс. стоимость для задания 3, у.е.; L×W — размеры этажа, м
+12-01: {plan: U3, points: [26, 21, 16, 16, 22], staff: [22, 20, 19, 21], growth: 10, budget: 265, L: 110, W: 70}
+12-02: {plan: T7, points: [19, 15, 16, 13, 22], staff: [14, 18, 19, 15], growth: 10, budget: 210, L: 100, W: 60}
+12-03: {plan: U7, points: [24, 29, 29, 18, 15], staff: [15, 19, 12, 22], growth: 20, budget: 245, L: 110, W: 70}
+12-04: {plan: U1, points: [12, 19, 17, 23, 16], staff: [19, 13, 16, 15], growth: 15, budget: 225, L: 100, W: 60}
+12-05: {plan: T1, points: [17, 17, 19, 27, 22], staff: [18, 23, 21, 20], growth: 10, budget: 265, L: 100, W: 60}
+12-06: {plan: T4, points: [15, 19, 24, 16, 22], staff: [22, 21, 14, 16], growth: 20, budget: 245, L: 110, W: 70}
+12-07: {plan: U6, points: [15, 19, 26, 20, 17], staff: [24, 20, 19, 21], growth: 10, budget: 265, L: 100, W: 60}
+12-08: {plan: T6, points: [17, 19, 24, 13, 20], staff: [18, 13, 22, 16], growth: 20, budget: 245, L: 110, W: 70}
+12-09: {plan: U8, points: [21, 20, 19, 13, 28], staff: [15, 18, 23, 14], growth: 20, budget: 245, L: 110, W: 70}
+12-10: {plan: T3, points: [26, 19, 20, 19, 14], staff: [23, 15, 19, 13], growth: 20, budget: 245, L: 100, W: 60}
+12-11: {plan: T5, points: [23, 14, 16, 18, 15], staff: [14, 20, 18, 15], growth: 10, budget: 210, L: 100, W: 60}
+12-12: {plan: U5, points: [15, 15, 24, 14, 19], staff: [18, 14, 19, 13], growth: 15, budget: 225, L: 110, W: 70}
+12-13: {plan: T1, points: [24, 18, 17, 29, 16], staff: [20, 19, 16, 22], growth: 10, budget: 245, L: 100, W: 60}
+12-14: {plan: U6, points: [22, 15, 17, 21, 26], staff: [19, 21, 20, 23], growth: 10, budget: 265, L: 100, W: 60}
+12-15: {plan: T2, points: [25, 23, 18, 15, 22], staff: [12, 18, 16, 17], growth: 15, budget: 225, L: 110, W: 70}
+12-16: {plan: U4, points: [17, 15, 24, 18, 24], staff: [13, 15, 17, 19], growth: 15, budget: 225, L: 100, W: 60}
+12-17: {plan: U3, points: [18, 23, 14, 15, 16], staff: [20, 15, 18, 13], growth: 10, budget: 210, L: 110, W: 70}
+12-18: {plan: T3, points: [18, 17, 20, 25, 14], staff: [17, 14, 25, 13], growth: 20, budget: 245, L: 110, W: 70}
+12-19: {plan: U2, points: [16, 16, 20, 22, 15], staff: [14, 20, 13, 17], growth: 15, budget: 225, L: 100, W: 60}
+12-20: {plan: U3, points: [24, 17, 28, 20, 25], staff: [15, 19, 21, 10], growth: 20, budget: 245, L: 110, W: 70}
+12-21: {plan: U4, points: [16, 15, 13, 22, 19], staff: [20, 19, 13, 15], growth: 10, budget: 210, L: 100, W: 60}
+12-22: {plan: T5, points: [15, 25, 30, 18, 22], staff: [13, 21, 10, 25], growth: 20, budget: 245, L: 100, W: 60}
+12-23: {plan: U4, points: [18, 25, 19, 21, 14], staff: [19, 22, 16, 14], growth: 15, budget: 245, L: 110, W: 70}
