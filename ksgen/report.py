@@ -75,7 +75,7 @@ def _render(st, solved, img, tasks, path, full=False):
     v, sks, lan2, lan3, vr = solved
     D = Doc()
     _title(D, st, v, tasks, full)
-    D.page_numbers()
+    D.page_numbers(first_footer=f"Москва {st.year}")
     D.page_break()
     D.toc()
     if 1 in tasks:
@@ -112,13 +112,10 @@ def _title(D, st, v, tasks, full):
     D.p(f"Вариант {v.key}", align="center", indent=False)
     for _ in range(3):
         D.p("", indent=False)
-    for t in (f"Выполнил: студент группы {st.group}", st.fio, "",
-              f"Проверил: {st.teacher}", "", "Дата сдачи: «___» ____________ 20__ г."):
+    for t in ("Выполнил:", f"студент группы {st.group}", st.fio, "",
+              f"Проверил: {st.teacher}", "", "Дата сдачи: ______________"):
         par = D.p(t, indent=False, align="left")
-        par.paragraph_format.left_indent = Cm(8.5)
-    for _ in range(3):
-        D.p("", indent=False)
-    D.p(f"Москва {st.year}", align="center", indent=False)
+        par.paragraph_format.left_indent = Cm(8)
 
 
 def _source_table(D, v):
@@ -128,7 +125,7 @@ def _source_table(D, v):
              "Максимальная стоимость для задания № 3, у.е.", "Размеры (L×W), м"],
             [(v.key, v.plan_title, ", ".join(map(str, v.points)), ", ".join(map(str, v.staff)),
               v.growth, v.budget, f"{v.L} × {v.W}")],
-            widths=[1.8, 2.4, 3.0, 2.8, 2.0, 2.6, 2.0], size=11)
+            widths=[1.8, 2.5, 2.9, 2.7, 2.1, 2.5, 2.0], size=11, head_size=10)
 
 
 # ----------------------------------------------------------------------
@@ -172,8 +169,8 @@ def _task1(D, st, v, sks, img):
         rows.append((z, len(ss), f"{ss[0].id} – {ss[-1].id}", ", ".join(ccs_z), ports))
     rows.append(("Итого", sum(len(s) for s in sks.sockets.values()), "", "", ""))
     D.table("Распределение точек подключения по зонам",
-            ["Зона", "Число розеток", "Идентификаторы", "ЦК", "Порты панелей"], rows,
-            widths=[1.6, 2.2, 4.4, 1.4, 5.4])
+            ["Зона", "Число розеток", "Идентификаторы розеток", "ЦК", "Порты панелей"], rows,
+            widths=[1.5, 2.3, 4.6, 1.3, 6.3])
     panels = []
     for c in names:
         n_sock = sum(1 for x in sks.all_sockets() if x.cc == c)
@@ -188,8 +185,10 @@ def _task1(D, st, v, sks, img):
         "коммутаторов, расположенных в разных ЦК (задания 2 и 3).")
 
     draw_plan.draw_plan(sks, img / "plan_sks.png")
+    D.landscape(True)
     f_plan = D.figure(img / "plan_sks.png",
-                      "План этажа с центрами коммутации, точками подключения и кабельными каналами", 16.5)
+                      "План этажа с центрами коммутации, точками подключения и кабельными каналами", 25.5, 14.5)
+    D.landscape(False)
 
     D.h2("1.3 Таблица статических соединений")
     lens = [s.length for s in sks.all_sockets()]
@@ -265,6 +264,14 @@ def _task2(D, st, v, sks, lan2, img):
         "становится порт коммутатора с меньшим ID, а порт коммутатора с большим ID блокируется (Б). "
         "При обрыве связи коммутатора группы с корневым заблокированный порт переходит в рабочее состояние, "
         "и доступ к общим серверам сохраняется через соседний коммутатор.")
+    users = []
+    for sw in lan2.access:
+        ps = sorted(p for p, (t, r) in sw.ports.items() if t.startswith("P-"))
+        if ps:
+            users.append(f"{sw.id}: порты {port_span(ps)} — рабочие места WG-{sw.wg};")
+    users[-1] = users[-1][:-1] + "."
+    D.p("Рабочие места подключены к портам коммутаторов групп (на рисунке не показаны, чтобы не загромождать схему):", keep=True)
+    D.bullets(users)
     dg = Diagram()
     for sw in lan2.switches:
         role = "корневой" if sw is lan2.core else f"WG-{sw.wg}"
@@ -278,15 +285,7 @@ def _task2(D, st, v, sks, lan2, img):
         dg.link((s.sw.id, s.port), s.name, width=2)
     dg.render(img / "lan2.png", legend="Сплошные линии — активная конфигурация STP, пунктир — заблокированная "
                                        "связь; К — корневой, Н — назначенный, Б — заблокированный порт")
-    D.figure(img / "lan2.png", "Структура ЛВС с активной конфигурацией и ролями портов STP", 16.5)
-    users = []
-    for sw in lan2.access:
-        ps = sorted(p for p, (t, r) in sw.ports.items() if t.startswith("P-"))
-        if ps:
-            users.append(f"{sw.id}: порты {port_span(ps)} — рабочие места WG-{sw.wg};")
-    users[-1] = users[-1][:-1] + "."
-    D.p("Рабочие места подключены к портам коммутаторов групп (на рисунке не показаны):", keep=True)
-    D.bullets(users)
+    D.figure(img / "lan2.png", "Структура ЛВС с активной конфигурацией и ролями портов STP", 16.5, 23.5)
 
     D.h2("2.5 Размещение оборудования и динамические соединения")
     rows = [(i, sw.id, sw.type, sw.cc) for i, sw in enumerate(lan2.switches, 1)]
@@ -386,7 +385,7 @@ def _task3(D, st, v, sks, lan2, lan3, img):
     rows.append(("Итого", "", "", "", lan3.cost))
     D.table("Размещение оборудования по центрам коммутации",
             ["№ п/п", "Идентификатор оборудования", "Тип оборудования", "Центр коммутации", "Стоимость, у.е."],
-            rows, widths=[1.5, 3.8, 4.4, 2.6, 2.6])
+            rows, widths=[1.5, 3.8, 4.4, 3.0, 2.8], head_size=11)
     terms = " + ".join(f"{sum(1 for s in lan3.switches if s.type == t)}·{c}"
                        for t, (_, _, c) in task3.TYPES.items() if any(s.type == t for s in lan3.switches))
     verdict = "что не превышает" if lan3.cost <= v.budget else "что ПРЕВЫШАЕТ"
@@ -401,7 +400,7 @@ def _task3(D, st, v, sks, lan2, lan3, img):
         "с метками IEEE 802.1q.")
     _net3(lan3).render(img / "lan3.png", legend="U — порт без меток (access), T — порт с метками 802.1q (trunk); "
                                                 "в нижней строке — номер VLAN")
-    D.figure(img / "lan3.png", "Структура ЛВС с VLAN на интеллектуальных коммутаторах", 16.5)
+    D.figure(img / "lan3.png", "Структура ЛВС с VLAN на интеллектуальных коммутаторах", 16.5, 23.5)
     _dyn(D, lan3.rows, "Динамические соединения")
 
     D.h2("3.4 IP-адресация и маршрутизация")
@@ -414,7 +413,7 @@ def _task3(D, st, v, sks, lan2, lan3, img):
     D.table("Таблица маршрутизации коммутатора 3-го уровня",
             ["IP-адрес сети назначения", "Маска сети", "IP-адрес следующего маршрутизатора",
              "Идентификатор порта модуля маршрутизации", "IP-адрес порта модуля маршрутизации"],
-            task4.routes(lan3), widths=[3.4, 3.2, 3.0, 3.0, 3.4], size=11)
+            task4.routes(lan3), widths=[3.2, 3.2, 3.4, 3.4, 3.3], size=11, head_size=10)
 
 
 # ----------------------------------------------------------------------
@@ -454,7 +453,7 @@ def _task4(D, st, v, lan2, lan3, vr, img):
 
     _net3(lan3, routers=True).render(img / "lan4.png", legend="R-01, R-02 — внешние маршрутизаторы "
                                                               f"(VRRP, VLAN{TRANSIT_VLAN})")
-    D.figure(img / "lan4.png", "Структура ЛВС с внешними маршрутизаторами", 16.5)
+    D.figure(img / "lan4.png", "Структура ЛВС с внешними маршрутизаторами", 16.5, 23.5)
     k = sum(1 for r in lan3.rows if r[0] != "section")
     add = []
     if vr.extra:
@@ -474,7 +473,7 @@ def _task4(D, st, v, lan2, lan3, vr, img):
     D.table("Таблица маршрутизации коммутатора 3-го уровня",
             ["IP-адрес сети назначения", "Маска сети", "IP-адрес следующего маршрутизатора",
              "Идентификатор порта модуля маршрутизации", "IP-адрес порта модуля маршрутизации"],
-            task4.routes(lan3, vr), widths=[3.4, 3.2, 3.0, 3.0, 3.4], size=11)
+            task4.routes(lan3, vr), widths=[3.2, 3.2, 3.4, 3.4, 3.3], size=11, head_size=10)
 
     D.h2("4.3 Параметры DHCP")
     D.p("Пользователям каждой VLAN адреса выдаются динамически из диапазона, начиная с .3 (адреса .1 и .2 "
@@ -482,4 +481,4 @@ def _task4(D, st, v, lan2, lan3, vr, img):
         "В качестве DNS-сервера указан адрес виртуального маршрутизатора.")
     D.table("Параметры DHCP-серверов для VLAN",
             ["VLAN", "Диапазон IP-адресов", "Маска сети", "IP-адрес маршрутизатора", "IP-адрес сервера DNS"],
-            task4.dhcp(lan3, vr), widths=[1.6, 5.0, 3.2, 3.2, 3.0], size=11)
+            task4.dhcp(lan3, vr), widths=[1.4, 5.4, 3.2, 3.3, 3.2], size=11, head_size=10)

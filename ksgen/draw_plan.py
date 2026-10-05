@@ -41,7 +41,7 @@ def draw_plan(sks: SKS, path, sockets=True):
     if not sockets:
         im.save(path)
         return
-    small = font(13)
+    small = font(15)
     for z, chan in sks.channels.items():
         pts = [_sc(p) for p in chan] + [_sc(chan[0])]
         d.line(pts, fill=CHAN, width=4, joint="curve")
@@ -64,13 +64,13 @@ def draw_plan(sks: SKS, path, sockets=True):
             label = s.id
             tw = d.textlength(label, font=small)
             if nx < 0:
-                tx, ty = x + 3, y - 15
+                tx, ty = x + 3, y - 17
             elif nx > 0:
-                tx, ty = x - tw - 3, y - 15
+                tx, ty = x - tw - 3, y - 17
             elif ny < 0:
                 tx, ty = x + 4, y + 3
             else:
-                tx, ty = x + 4, y - 17
+                tx, ty = x + 4, y - 19
             d.text((tx, ty), label, font=small, fill=INK)
     _cc_marker(d, sks, font(30))
     im.save(path)

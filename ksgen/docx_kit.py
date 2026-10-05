@@ -23,6 +23,9 @@ def _font(style_or_run, size=14, bold=None):
     if rfonts is None:
         rfonts = OxmlElement("w:rFonts")
         rpr.insert(0, rfonts)
+    for a in ("w:asciiTheme", "w:hAnsiTheme", "w:eastAsiaTheme", "w:cstheme"):
+        if rfonts.get(qn(a)) is not None:
+            del rfonts.attrib[qn(a)]
     for a in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
         rfonts.set(qn(a), FONT)
 
@@ -109,7 +112,7 @@ class Doc:
         par.add_run().add_break(WD_BREAK.PAGE)
 
     # ---- таблицы ----
-    def table(self, title, headers, rows, widths=None, size=12, align=None):
+    def table(self, title, headers, rows, widths=None, size=12, align=None, head_size=None):
         """rows: кортежи значений или ("section", "текст") — объединённая строка-подзаголовок."""
         self.tables += 1
         cap = self.p(f"Таблица {self.tables} – {title}", indent=False, align="left", keep=True)
@@ -119,7 +122,7 @@ class Doc:
         t.style = "Table Grid"
         t.alignment = WD_TABLE_ALIGNMENT.CENTER
         for i, h in enumerate(headers):
-            self._cell(t.rows[0].cells[i], h, size, bold=True)
+            self._cell(t.rows[0].cells[i], h, head_size or size, bold=True)
         _repeat_header(t.rows[0])
         for r in rows:
             row = t.add_row()
@@ -131,11 +134,25 @@ class Doc:
             for i, val in enumerate(r):
                 a = align[i] if align else "center"
                 self._cell(row.cells[i], str(val), size, align=a)
-        if widths:
-            for row in t.rows:
-                for i, w in enumerate(widths):
-                    if i < len(row.cells):
-                        row.cells[i].width = Cm(w)
+        widths = widths or [16.5 / ncol] * ncol
+        k = 16.5 / sum(widths) if sum(widths) > 16.5 else 1
+        widths = [w * k for w in widths]
+        t.autofit = False
+        tblpr = t._tbl.tblPr
+        lay = OxmlElement("w:tblLayout")
+        lay.set(qn("w:type"), "fixed")
+        tblpr.append(lay)
+        for i, w in enumerate(widths):
+            t.columns[i].width = Cm(w)
+        for row in t.rows:
+            for i, w in enumerate(widths):
+                if i < len(row.cells):
+                    row.cells[i].width = Cm(w)
+        if len(rows) <= 20:   # короткую таблицу не разрывать между страницами
+            for row in t.rows[:-1]:
+                for c in row.cells:
+                    for par in c.paragraphs:
+                        par.paragraph_format.keep_with_next = True
         self.p("", indent=False).paragraph_format.line_spacing = 1.0
         return t
 
@@ -151,7 +168,10 @@ class Doc:
         r.italic = italic
 
     # ---- рисунки ----
-    def figure(self, path, title, width_cm=16.0):
+    def figure(self, path, title, width_cm=16.0, max_h_cm=21.0):
+        from PIL import Image
+        w, h = Image.open(path).size
+        width_cm = min(width_cm, max_h_cm * w / h)
         self.figures += 1
         par = self.d.add_paragraph()
         par.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -163,6 +183,23 @@ class Doc:
         self.p(f"Рисунок {self.figures} – {title}", align="center", indent=False)
         return self.figures
 
+    def landscape(self, on=True):
+        """Новый раздел книжной/альбомной ориентации (колонтитулы — как в предыдущем)."""
+        from docx.enum.section import WD_ORIENT
+        sec = self.d.add_section(WD_SECTION.NEW_PAGE)
+        sec.different_first_page_header_footer = False
+        if on:
+            sec.orientation = WD_ORIENT.LANDSCAPE
+            sec.page_width, sec.page_height = Cm(29.7), Cm(21.0)
+            sec.left_margin, sec.right_margin = Cm(2), Cm(2)
+            sec.top_margin, sec.bottom_margin = Cm(3), Cm(1.5)
+        else:
+            sec.orientation = WD_ORIENT.PORTRAIT
+            sec.page_width, sec.page_height = Cm(21.0), Cm(29.7)
+            sec.left_margin, sec.right_margin = Cm(3), Cm(1.5)
+            sec.top_margin, sec.bottom_margin = Cm(2), Cm(2)
+        return sec
+
     # ---- служебное ----
     def toc(self):
         self.p("СОДЕРЖАНИЕ", bold=True, align="center", indent=False)
@@ -170,9 +207,14 @@ class Doc:
         par.paragraph_format.first_line_indent = Cm(0)
         _field(par, 'TOC \\o "1-2" \\h \\z \\u', "Содержание обновится при открытии файла (F9 — обновить поле).")
 
-    def page_numbers(self):
+    def page_numbers(self, first_footer=None):
         s = self.d.sections[0]
         s.different_first_page_header_footer = True
+        if first_footer:
+            fp = s.first_page_footer.paragraphs[0]
+            fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            fp.paragraph_format.first_line_indent = Cm(0)
+            self._runs(fp, first_footer)
         par = s.footer.paragraphs[0]
         par.alignment = WD_ALIGN_PARAGRAPH.CENTER
         par.paragraph_format.first_line_indent = Cm(0)
