@@ -41,12 +41,15 @@ class Diagram:
         self.links.append(dict(a=a, b=b, dashed=dashed, la=la, lb=lb, width=width))
 
     # ------------------------------------------------------------------
-    def render(self, path, legend=None):
+    def render(self, path, legend=None, columns=2):
+        """Коммутаторы — сеткой в columns колонок (по строкам). Связи коммутатор — коммутатор идут по
+        вертикальным каналам в промежутке между колонками, к значкам — по каналам у внешнего края колонки."""
         nodes = {n["key"]: n for n in self.nodes}
-        icons = {i["key"]: i for i in self.icons}
+        col = {n["key"]: (i % columns if columns > 1 else 0) for i, n in enumerate(self.nodes)}
+        row = {n["key"]: (i // columns if columns > 1 else i) for i, n in enumerate(self.nodes)}
         # полосы: сколько концов связей выходит вверх/вниз у каждого коммутатора
         lanes = {k: {"top": 0, "bottom": 0} for k in nodes}
-        ends = []   # (link idx, end 'a'/'b', node, port, side, lane)
+        ends = []
         for li, l in enumerate(self.links):
             for e in ("a", "b"):
                 ref = l[e]
@@ -56,30 +59,55 @@ class Diagram:
                     ends.append((li, e, nk, port, side, lanes[nk][side]))
                     lanes[nk][side] += 1
         icons_of = {k: [i for i in self.icons if i["node"] == k] for k in nodes}
-        n_left = sum(1 for l in self.links if not (isinstance(l["a"], tuple) and isinstance(l["b"], tuple)))
-        n_right = len(self.links) - n_left
+        icon_side = {i["key"]: col[i["node"]] for i in self.icons}   # 0 — слева, 1 — справа
 
-        cloud_w = 260 if self.cloud else 0
+        def is_sw(ref):
+            return isinstance(ref, tuple)
+        n_mid = sum(1 for l in self.links if is_sw(l["a"]) and is_sw(l["b"]))
+        side_links = [l for l in self.links if not (is_sw(l["a"]) and is_sw(l["b"]))]
+
+        def link_side(l):
+            ref = l["b"] if is_sw(l["a"]) else l["a"]
+            return icon_side[ref]
+        n_left = sum(1 for l in side_links if link_side(l) == 0)
+        n_right = len(side_links) - n_left
+
         f_icon = font(19)
         probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-        icon_w = 120 + int(max([probe.textlength(i["label"], font=f_icon) for i in self.icons if i["kind"] != "router"] + [60]))
-        x_left_chan = cloud_w + icon_w + 20
-        x_plate = x_left_chan + n_left * CHAN + 30
-        plate_w = max(FACE[n["type"]]["size"][0] for n in self.nodes)
-        x_right_chan = x_plate + plate_w + 30
-        width = x_right_chan + n_right * CHAN + 30
 
-        # вертикальная раскладка
+        def icons_w(side):
+            labels = [probe.textlength(i["label"], font=f_icon) for i in self.icons
+                      if icon_side[i["key"]] == side and i["kind"] != "router"]
+            return 120 + int(max(labels + [60])) if any(icon_side[i["key"]] == side for i in self.icons) else 20
+        cloud_w = 260 if self.cloud else 0
+        left_w = cloud_w + icons_w(0)
+        plate_w = max(FACE[n["type"]]["size"][0] for n in self.nodes)
+        x_left_chan = left_w + 10
+        x_col = [x_left_chan + n_left * CHAN + 30]
+        x_mid_chan = x_col[0] + plate_w + 30
+        if columns > 1:
+            x_col.append(x_mid_chan + n_mid * CHAN + 30)
+            x_right_chan = x_col[1] + plate_w + 30
+        else:
+            x_right_chan = x_mid_chan + n_mid * CHAN + 10
+        x_right_icons = x_right_chan + n_right * CHAN + 30
+        width = x_right_icons + (icons_w(1) if columns > 1 else 0) + 20
+
+        # вертикальная раскладка по строкам
         pos = {}
         y = 20
-        for n in self.nodes:
-            k = n["key"]
-            h = FACE[n["type"]]["size"][1]
-            top = 34 + LANE * lanes[k]["top"] + 8
-            bottom = LANE * lanes[k]["bottom"] + 30
-            block = max(top + h + bottom, top + ICON_H * len(icons_of[k]) + 10)
-            pos[k] = (x_plate, y + top)
-            n["block"] = (y, y + block)
+        n_rows = max(row.values()) + 1
+        for r in range(n_rows):
+            keys = [k for k in nodes if row[k] == r]
+            tops = {k: 34 + LANE * lanes[k]["top"] + 8 for k in keys}
+            top = max(tops.values())
+            block = 0
+            for k in keys:
+                h = FACE[nodes[k]["type"]]["size"][1]
+                block = max(block, top + h + LANE * lanes[k]["bottom"] + 30, top + ICON_H * len(icons_of[k]) + 10)
+            for k in keys:
+                pos[k] = (x_col[col[k]], y + top)
+                nodes[k]["block"] = (y, y + block)
             y += block + 10
         legend_lines = _wrap(legend, font(20), width - 40) if legend else []
         height = y + 30 * len(legend_lines) + 20
@@ -89,7 +117,6 @@ class Diagram:
         f_title = font(24)
         f_box = font(15)
 
-        # коммутаторы
         for n in self.nodes:
             k = n["key"]
             x, yy = pos[k]
@@ -100,18 +127,23 @@ class Diagram:
                 pinfo = FACE[n["type"]]["ports"][str(port)]
                 for box, text in ((pinfo.get("mode_box"), mode), (pinfo.get("vlan_box"), vlan)):
                     if box and text != "":
-                        cx = x + (box[0] + box[2]) / 2
-                        cy = yy + (box[1] + box[3]) / 2
-                        d.text((cx, cy), str(text), font=f_box, fill=BLUE, anchor="mm")
+                        d.text((x + (box[0] + box[2]) / 2, yy + (box[1] + box[3]) / 2), str(text),
+                               font=f_box, fill=BLUE, anchor="mm")
 
-        # значки слева от своего коммутатора
+        # значки: у левой колонки — слева, у правой — справа
         ipos = {}
         for k, lst in icons_of.items():
             x, yy = pos[k]
             for j, ic in enumerate(lst):
                 cy = yy + ICON_H * j + ICON_H // 2 - 10
-                ipos[ic["key"]] = (cloud_w + icon_w - 10, cy)
-                _icon(d, ic["kind"], cloud_w + icon_w - 60, cy, ic["label"], f_icon)
+                if icon_side[ic["key"]] == 0:
+                    ix = left_w - 60
+                    ipos[ic["key"]] = (ix + 50, cy)
+                    _icon(d, ic["kind"], ix, cy, ic["label"], f_icon)
+                else:
+                    ix = x_right_icons + 40
+                    ipos[ic["key"]] = (ix - 50, cy)
+                    _icon(d, ic["kind"], ix, cy, ic["label"], f_icon, right=True)
 
         def port_exit(nk, port):
             x, yy = pos[nk]
@@ -123,38 +155,41 @@ class Diagram:
             return (cx, yy + r[3]), yy + info["size"][1], 1
 
         lane_of = {(li, e): (nk, side, ln) for li, e, nk, port, side, ln in ends}
-        right_k = left_k = 0
+        k_mid = k_left = k_right = 0
         bubbles = []
         for li, l in enumerate(self.links):
-            pts_a = pts_b = None
-            if isinstance(l["a"], tuple) and isinstance(l["b"], tuple):
-                cxr = x_right_chan + CHAN * right_k
-                right_k += 1
+            if is_sw(l["a"]) and is_sw(l["b"]):
+                cx = x_mid_chan + CHAN * k_mid
+                k_mid += 1
+            elif link_side(l) == 0:
+                cx = x_left_chan + CHAN * (n_left - 1 - k_left)
+                k_left += 1
             else:
-                cxr = x_left_chan + CHAN * (n_left - 1 - left_k)
-                left_k += 1
+                cx = x_right_chan + CHAN * k_right
+                k_right += 1
             route = []
             for e in ("a", "b"):
                 ref = l[e]
-                if isinstance(ref, tuple):
+                if is_sw(ref):
                     nk, port = ref
                     (px, py), edge, sgn = port_exit(nk, port)
                     _, side, ln = lane_of[(li, e)]
                     ly = edge + sgn * (LANE * (ln + 1))
-                    seg = [(px, py), (px, ly), (cxr, ly)]
+                    seg = [(px, py), (px, ly), (cx, ly)]
                     lab = l["la"] if e == "a" else l["lb"]
                     if lab:
                         bubbles.append(((px, (py + edge) / 2), lab))
                 else:
                     ix, iy = ipos[ref]
-                    seg = [(ix, iy), (cxr, iy)]
+                    seg = [(ix, iy), (cx, iy)]
                 route.append(seg)
-            pts = route[0] + list(reversed(route[1]))
-            _poly(d, pts, l["width"], l["dashed"])
+            _poly(d, route[0] + list(reversed(route[1])), l["width"], l["dashed"])
+        role_color = {"К": (0, 130, 0), "Н": (120, 40, 160), "Б": RED}
         for (bx, by), lab in bubbles:
             r = 13
-            d.ellipse([bx - r, by - r, bx + r, by + r], fill="white", outline=RED, width=2)
-            d.text((bx, by), lab, font=font(17), fill=RED, anchor="mm")
+            c = role_color.get(lab, RED)
+            d.ellipse([bx - r, by - r, bx + r, by + r], fill="white", outline=c, width=2)
+            d.text((bx, by), lab, font=font(17), fill=c, anchor="mm")
 
         if self.cloud:
             routers = [ipos[k] for k in self.cloud]
@@ -163,7 +198,7 @@ class Diagram:
             d.ellipse([cx - 100, cy - 45, cx + 100, cy + 45], outline=INK, width=3, fill=(245, 245, 255))
             d.text((cx, cy), "Internet", font=font(26), fill=INK, anchor="mm")
             for (x, yy) in routers:
-                d.line([(cloud_w + icon_w - 86, yy), (cx + 100, cy)], fill=INK, width=3)
+                d.line([(x - 76, yy), (cx + 100, cy)], fill=INK, width=3)
 
         for i, line in enumerate(legend_lines):
             d.text((20, height - 20 - 30 * (len(legend_lines) - i)), line, font=font(20), fill=INK)
@@ -185,7 +220,7 @@ def _poly(d, pts, width, dashed):
             k += step
 
 
-def _icon(d, kind, x, cy, label, f):
+def _icon(d, kind, x, cy, label, f, right=False):
     """Значок: сервер (корпус), маршрутизатор (шайба). Подпись слева."""
     if kind == "router":
         d.rounded_rectangle([x - 26, cy - 16, x + 26, cy + 16], radius=10, outline=INK, width=3, fill=(235, 225, 245))
@@ -201,7 +236,7 @@ def _icon(d, kind, x, cy, label, f):
         d.text((x, cy - 20), label, font=f, fill=INK, anchor="md")
         return
     tw = d.textlength(label, font=f)
-    d.text((x - 32 - tw, cy - 11), label, font=f, fill=INK)
+    d.text((x + 32 if right else x - 32 - tw, cy - 11), label, font=f, fill=INK)
 
 
 def _wrap(text, f, width):

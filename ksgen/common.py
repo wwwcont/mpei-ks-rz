@@ -20,7 +20,7 @@ class Student:
     group: str        # «А-12-23»
     variant: int      # номер варианта (обычно = номер в журнале)
     journal: int      # номер в журнале — для IP-адресов 1xx.1yy.zz.0
-    teacher: str = "Рыбинцев В.О."
+    teacher: str = "Рыбинцев Владимир Олегович"
     year: int = 2026
 
     @property

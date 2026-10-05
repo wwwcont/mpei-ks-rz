@@ -12,7 +12,7 @@ def main():
     ap.add_argument("--group", required=True, help="например А-12-23")
     ap.add_argument("--variant", type=int, required=True, help="номер варианта (две последние цифры)")
     ap.add_argument("--journal", type=int, help="номер в журнале группы (по умолчанию = вариант)")
-    ap.add_argument("--teacher", default="Рыбинцев В.О.")
+    ap.add_argument("--teacher", default="Рыбинцев Владимир Олегович")
     ap.add_argument("--out", default=None, help="папка результата (по умолчанию build/<группа>/<вариант>)")
     a = ap.parse_args()
     st = Student(fio=" ".join(a.fio.split()), group=a.group.strip(), variant=a.variant,

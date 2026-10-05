@@ -58,14 +58,10 @@ class Doc:
         h1 = self.d.styles["Heading 1"].paragraph_format
         h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
         h1.first_line_indent = Cm(0)
-        self.d.styles["Heading 1"].font.all_caps = True
+        self.d.styles["Heading 1"].font.all_caps = False
         h2 = self.d.styles["Heading 2"].paragraph_format
         h2.first_line_indent = Cm(1.25)
         h2.space_before = Pt(12)
-        # обновить поля (содержание, номера страниц) при открытии в Word
-        upd = OxmlElement("w:updateFields")
-        upd.set(qn("w:val"), "true")
-        self.d.settings.element.append(upd)
 
     # ---- текст ----
     def p(self, text="", bold=False, align=None, indent=True, size=14, keep=False, italic=False):
@@ -115,8 +111,12 @@ class Doc:
     def table(self, title, headers, rows, widths=None, size=12, align=None, head_size=None):
         """rows: кортежи значений или ("section", "текст") — объединённая строка-подзаголовок."""
         self.tables += 1
-        cap = self.p(f"Таблица {self.tables} – {title}", indent=False, align="left", keep=True)
+        cap = self.p(f"Таблица {self.tables}", indent=False, align="right", keep=True)
         cap.paragraph_format.space_before = Pt(6)
+        cap.paragraph_format.line_spacing = 1.0
+        name = self.p(title, indent=False, align="center", keep=True)
+        name.paragraph_format.line_spacing = 1.0
+        name.paragraph_format.space_after = Pt(3)
         ncol = len(headers)
         t = self.d.add_table(rows=1, cols=ncol)
         t.style = "Table Grid"
@@ -180,7 +180,7 @@ class Doc:
         par.paragraph_format.line_spacing = 1.0
         par.paragraph_format.space_before = Pt(6)
         par.add_run().add_picture(str(path), width=Cm(width_cm))
-        self.p(f"Рисунок {self.figures} – {title}", align="center", indent=False)
+        self.p(f"Рис. {self.figures}. {title}", align="center", indent=False)
         return self.figures
 
     def landscape(self, on=True):
@@ -200,6 +200,30 @@ class Doc:
             sec.top_margin, sec.bottom_margin = Cm(2), Cm(2)
         return sec
 
+    def kv_table(self, rows, indent_cm=4.5, col1=4.6, col2=7.4):
+        """Таблица без рамок для титула: [(подпись, значение)], подпись жирная; ("Выполнил", None) — заголовок."""
+        t = self.d.add_table(rows=0, cols=2)
+        t.autofit = False
+        tblpr = t._tbl.tblPr
+        ind = OxmlElement("w:tblInd")
+        ind.set(qn("w:w"), str(int(indent_cm * 567)))
+        ind.set(qn("w:type"), "dxa")
+        tblpr.append(ind)
+        lay = OxmlElement("w:tblLayout")
+        lay.set(qn("w:type"), "fixed")
+        tblpr.append(lay)
+        t.columns[0].width, t.columns[1].width = Cm(col1), Cm(col2)
+        for k, v in rows:
+            r = t.add_row()
+            r.cells[0].width, r.cells[1].width = Cm(col1), Cm(col2)
+            if v is None:
+                c = r.cells[0].merge(r.cells[1])
+                self._cell(c, k, 14, bold=True, align="left")
+            else:
+                self._cell(r.cells[0], k, 14, bold=True, align="left")
+                self._cell(r.cells[1], v, 14, align="left")
+        return t
+
     # ---- служебное ----
     def toc(self):
         self.p("СОДЕРЖАНИЕ", bold=True, align="center", indent=False)
@@ -207,9 +231,16 @@ class Doc:
         par.paragraph_format.first_line_indent = Cm(0)
         _field(par, 'TOC \\o "1-2" \\h \\z \\u', "Содержание обновится при открытии файла (F9 — обновить поле).")
 
-    def page_numbers(self, first_footer=None):
+    def page_numbers(self, first_footer=None, first_header=()):
         s = self.d.sections[0]
         s.different_first_page_header_footer = True
+        hp = s.first_page_header.paragraphs[0]
+        for i, line in enumerate(first_header):
+            par = hp if i == 0 else s.first_page_header.add_paragraph()
+            par.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            par.paragraph_format.first_line_indent = Cm(0)
+            par.paragraph_format.line_spacing = 1.0
+            self._runs(par, line)
         if first_footer:
             fp = s.first_page_footer.paragraphs[0]
             fp.alignment = WD_ALIGN_PARAGRAPH.CENTER

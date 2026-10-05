@@ -158,7 +158,7 @@ def build(st: Student, v: Variant, sks: SKS) -> LAN2:
         main_cc = max(sorted(by_cc), key=lambda c: len(by_cc[c]))
         for cc in sorted(by_cc):
             parts.append((w, cc, by_cc[cc], cc == main_cc))
-        servers.append(Server(f"Server-WG{w}", f"Сервер WG-{w}", main_cc))
+        servers.append(Server(f"WG-{w}-server", f"Сервер WG-{w}", main_cc))
 
     access, n = [], 1
     user_ports = {}
@@ -188,8 +188,8 @@ def build(st: Student, v: Variant, sks: SKS) -> LAN2:
     core_cc = rng.choice(sorted(c for c in cnt if cnt[c] == top))
     core_type = "S12TF" if len(access) + 2 <= 12 else "S24TF"
     core = Switch(id=f"{PREFIX[core_type]}-01", type=core_type, cc=core_cc, bid=1)
-    common = [Server("CommonServer", "Общий сервер отдела", core_cc),
-              Server("DB-Server", "Сервер базы данных отдела", core_cc)]
+    common = [Server("File-server-main", "Общий сервер отдела", core_cc),
+              Server("DB-server-main", "Сервер базы данных отдела", core_cc)]
     common[0].sw, common[0].port = core, core.cap - 1
     common[1].sw, common[1].port = core, core.cap
     core.ports[core.cap - 1] = (common[0].name, "Н")
@@ -234,8 +234,8 @@ def build(st: Student, v: Variant, sks: SKS) -> LAN2:
         l.a.ports[l.pa] = (l.b.pid(l.pb), l.ra)
         l.b.ports[l.pb] = (l.a.pid(l.pa), l.rb)
     for a in access:
-        busy = [p for p, (t, r) in a.ports.items() if not r and not t.startswith("Server")]
-        assert max(busy) < min(p for p, (t, r) in a.ports.items() if r or t.startswith("Server")), a.id
+        busy = [p for p, (t, r) in a.ports.items() if not r and not t.endswith(("-server", "-main"))]
+        assert max(busy) < min(p for p, (t, r) in a.ports.items() if r or t.endswith(("-server", "-main"))), a.id
 
     # магистрали между ЦК — через статические соединения СКС
     need = {}
@@ -272,7 +272,7 @@ def finalize(lan: LAN2, sks: SKS, trunks: dict):
             rows.append((l.via[1], l.b.pid(l.pb), "||"))
         else:
             rows.append((l.a.pid(l.pa), l.b.pid(l.pb), "X"))
-    rows.append(("section", "Подключение серверов"))
+    rows.append(("section", "Сервера"))
     for s in lan.servers:
-        rows.append((s.sw.pid(s.port), s.name, "||"))
+        rows.append((s.name, s.sw.pid(s.port), "||"))
     lan.rows = rows

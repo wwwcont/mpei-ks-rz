@@ -44,6 +44,6 @@ body:
     id: teacher
     attributes:
       label: Преподаватель
-      value: Рыбинцев В.О.
+      value: Рыбинцев Владимир Олегович
     validations:
       required: true

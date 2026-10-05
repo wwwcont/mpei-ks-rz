@@ -12,7 +12,7 @@ TYPES = {
     "SS12TF-2TG-L2": (12, 2, 35),
     "SS12TG-L3": (0, 12, 45),
 }
-PREFIX = {"SS24TF-2TG-L2": "SS24", "SS12TF-2TG-L2": "SS12", "SS12TG-L3": "L3"}
+PREFIX = {"SS24TF-2TG-L2": "SS2L24", "SS12TF-2TG-L2": "SS2L12", "SS12TG-L3": "SS3L12"}
 ROUTER_PORTS = 2       # на L3 под R-01 и R-02 (задание 4)
 SERVER_VLAN = 50
 TRANSIT_VLAN = 60
@@ -126,25 +126,25 @@ def build(st: Student, v: Variant, sks: SKS, lan2: LAN2) -> LAN3:
     for w, socks in lan2.placement.items():
         for s in socks:
             users_cc[s.cc] = users_cc.get(s.cc, 0) + 1
-    srv_cc = [s.cc for s in lan2.servers if s.name.startswith("Server-WG")]
+    srv_cc = [s.cc for s in lan2.servers if s.name.endswith("-server")]
     ccs = sorted(sks.cc)
 
     top = cheapest(ccs, users_cc, srv_cc, v.budget)
     cost, _, l3_cc, cfg, reserve = st.rng("lan3").choice(top)
 
-    l3 = SSwitch(id="L3-01", type="SS12TG-L3", cc=l3_cc)
-    l2, n = [], 1
+    l3 = SSwitch(id="SS3L12-01", type="SS12TG-L3", cc=l3_cc)
+    l2, num = [], {}
     for cc in ccs:
-        for t in cfg[cc]:
-            n += 1
-            l2.append(SSwitch(id=f"{PREFIX[t]}-{n:02d}", type=t, cc=cc))
+        for t in sorted(cfg[cc]):   # нумерация — своя у каждого типа, с 01
+            num[t] = num.get(t, 0) + 1
+            l2.append(SSwitch(id=f"{PREFIX[t]}-{num[t]:02d}", type=t, cc=cc))
 
     # L3: 1–2 общие серверы, сверху вниз — магистрали к L2, ниже — маршрутизаторы R-01/R-02
     servers = {}
-    l3.ports[1] = ("CommonServer", "U", SERVER_VLAN)
-    l3.ports[2] = ("DB-Server", "U", SERVER_VLAN)
-    servers["CommonServer"] = (l3, 1, SERVER_VLAN)
-    servers["DB-Server"] = (l3, 2, SERVER_VLAN)
+    l3.ports[1] = ("File-server-main", "U", SERVER_VLAN)
+    l3.ports[2] = ("DB-server-main", "U", SERVER_VLAN)
+    servers["File-server-main"] = (l3, 1, SERVER_VLAN)
+    servers["DB-server-main"] = (l3, 2, SERVER_VLAN)
     trunks = []
     p = 12
     for sw in l2:
@@ -162,9 +162,9 @@ def build(st: Student, v: Variant, sks: SKS, lan2: LAN2) -> LAN3:
 
     # серверы групп — на свободный гигабитный порт L2 в своём ЦК (или на L3)
     for s in lan2.servers:
-        if not s.name.startswith("Server-WG"):
+        if not s.name.endswith("-server"):
             continue
-        w = int(s.name[-1])
+        w = int(s.name.split("-")[1])
         cand = [sw for sw in l2 if sw.cc == s.cc and free_gig(sw)]
         cand += [l3] if l3.cc == s.cc and free_gig(l3) else []
         cand += [sw for sw in l2 if free_gig(sw)] + ([l3] if free_gig(l3) else [])
@@ -239,12 +239,12 @@ def finalize(lan: LAN3, lan2: LAN2, trunks: dict):
             key = tuple(sorted((sw.cc, lan.l3.cc)))
             link = free[key].pop(0)
             pa, pb = (link.a, link.b) if key[0] == sw.cc else (link.b, link.a)
-            rows.append((sw.pid(up), pa, "X"))
+            rows.append((sw.pid(up), pa, "||"))
             rows.append((pb, lan.l3.pid(p), "||"))
             lan.via[sw.id] = (pa, pb)
         else:
-            rows.append((sw.pid(up), lan.l3.pid(p), "X"))
-    rows.append(("section", "Подключение серверов"))
+            rows.append((sw.pid(up), lan.l3.pid(p), "||"))
+    rows.append(("section", "Сервера"))
     for name, (sw, q, _) in lan.servers.items():
-        rows.append((sw.pid(q), name, "||"))
+        rows.append((name, sw.pid(q), "||"))
     lan.rows = rows

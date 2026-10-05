@@ -53,7 +53,8 @@ def _extend(lan3: LAN3):
         raise SystemExit("задание 4: на L3 нет ни свободного порта, ни рабочего места для переноса")
     sid = next(k for k, (sw, port) in lan3.user_ports.items() if sw is l3 and port == q)
     name, mode, vlan = l3.ports[q]
-    new = SSwitch(id=f"SS12-{len(lan3.l2) + 2:02d}", type="SS12TF-2TG-L2", cc=l3.cc)
+    n12 = sum(1 for sw in lan3.l2 if sw.type == "SS12TF-2TG-L2")
+    new = SSwitch(id=f"SS2L12-{n12 + 1:02d}", type="SS12TF-2TG-L2", cc=l3.cc)
     new.ports[1] = (name, "U", vlan)
     new.ports[14] = (l3.pid(q), "T", "")
     l3.ports[q] = (new.pid(14), "T", "")
@@ -81,7 +82,7 @@ def dhcp(lan3: LAN3, vr: VRRP):
     for vlan in sorted(lan3.ip):
         ip = lan3.ip[vlan]
         if vlan == SERVER_VLAN:
-            rows.append((str(vlan), "— (статические адреса)", "255.255.255.0", ip["gw"], vr.vip))
+            continue   # VLAN50 — только статические адреса серверов, DHCP не нужен
         else:
             rows.append((str(vlan), f"{ip['first']} – {ip['last']}", "255.255.255.0", ip["gw"], vr.vip))
     return rows

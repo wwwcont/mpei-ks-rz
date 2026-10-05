@@ -66,7 +66,7 @@ def main():
     j = re.search(r"\d+", f.get("journal", ""))
     journal = int(j.group()) if j else variant
     st = Student(fio=fio, group=group, variant=variant, journal=journal,
-                 teacher=f.get("teacher") or "Рыбинцев В.О.")
+                 teacher=f.get("teacher") or "Рыбинцев Владимир Олегович")
     folder = f"{group}/{variant:02d} {st.short}"
     out = Path(os.environ.get("OUT_DIR", "out")) / folder
     try:
